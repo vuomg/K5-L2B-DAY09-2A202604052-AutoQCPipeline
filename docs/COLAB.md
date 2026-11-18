@@ -1,6 +1,6 @@
 # Train trên Google Colab
 
-[![Mở trong Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/VinUni-AI20k/K5-L23-Day09-AutoQC-Pipeline-Lab/blob/main/notebooks/day09_train_compare.ipynb)
+[![Mở trong Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vuomg/K5-L2B-DAY09-2A202604052-AutoQCPipeline/blob/main/notebooks/day09_train_compare.ipynb)
 *(badge trỏ vào repo mẫu; với repo của bạn đổi `VinUni-AI20k/K5-L23-Day09-AutoQC-Pipeline-Lab` thành `<tài-khoản>/<tên-repo>`. Repo phải **public**.)*
 
 Chỉ phần **train** cần GPU (T4 miễn phí). Pipeline, calibration và báo cáo chạy ngay trên máy bạn.
