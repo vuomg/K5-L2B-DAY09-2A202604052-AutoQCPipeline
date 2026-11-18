@@ -101,3 +101,34 @@ Nếu ở lô sau tỉ lệ cảnh báo vượt 10% (Hold), cần tăng ngân s�
 - **AI sai:**
   - Lần đầu AI đề xuất `conf = 0.6` vì chỉ nhìn lưới sweep thô (0.6, 0.7, 0.8); sweep mịn hơn mới thấy 0.75 tốt hơn.
   - Sau đó AI nói 0.75 "tốt hơn ở mọi chỉ số", nhưng so với giá trị khởi đầu thì **LOOSE_BOX recall giảm 0,40 → 0,20**. AI đã so với 0.6 chứ không so với khởi đầu, phải đối chiếu lại `calibration_report.md` mới thấy.
+
+**(Thưởng) CVAT — lọc box nhỏ.**
+- **Thiết lập:** CVAT local 2.81 (`localhost:8080`). Tạo project `Day09-QC` từ `cvat/labels.json` và task `review-top20` gồm 25 ảnh: 20 ảnh đầu `05_review_queue.csv` và 5 ảnh có `BOX_TINY`. Import nhãn sau autofix theo định dạng YOLO 1.1 (88 box).
+- **Bộ lọc `width < 20`:** khớp **23 box trên 7 ảnh**:
+
+  | Ảnh | Số box khớp |
+  |---|---|
+  | img_0020 | 4 |
+  | img_0026 | 6 |
+  | img_0030 | 4 |
+  | img_0051 | 3 |
+  | img_0069 | 2 |
+  | img_0078 | 1 (car) |
+  | img_0161 | 3 |
+
+  22/23 box là **person** đứng xa: rộng 9–20 px nhưng cao 22–84 px.
+- **Ảnh chụp:** [`submission/cvat/filter_width20.png`](cvat/filter_width20.png) (job 23, `img_0020`, bộ lọc `width < 20` → *Items: 4*).
+  - Ba box nhỏ (15,0 × 50,7 / 16,8 × 55,3 / 19,5 × 54,3 px) là người thật ở phía sau người mặc áo hồng.
+  - Box `PERSON 7` (16,4 × 33,2 px) nằm trong cửa kính xe buýt, có thể là hành khách bên trong hoặc hình phản chiếu. Đây là ca cần người quyết định giữ hay xoá (đúng loại ca nên tick `can_review`), và pipeline không cờ box này.
+- **Đối chiếu với `BOX_TINY`:** pipeline cờ 7 box trên 5 ảnh:
+
+  | Ảnh | Dòng bị cờ |
+  |---|---|
+  | img_0026 | 6 |
+  | img_0030 | 9 |
+  | img_0051 | 5 |
+  | img_0069 | 2 |
+  | img_0161 | 2, 3, 4 |
+
+  Cả 7 box đều nằm trong tập CVAT, ngược lại thì không: 16 box rộng 12–20 px chỉ CVAT bắt được, vì pipeline dùng ngưỡng 12 px (cạnh ngắn) còn slide dùng 20 px. Riêng `img_0020` (4 box) và `img_0078` (1 box) nằm ở đầu hàng đợi nhưng pipeline không cờ `BOX_TINY`. Các box này là người và xe ở xa, có thật trong ảnh, nên **không** dùng *Remove filtered shapes* xoá hàng loạt. Bộ lọc `width < 20` hợp để *xem*, không hợp để *xoá*.
+- **`can_review`:** người gán tick thuộc tính này khi không chắc chắn (vật bị che, quá nhỏ, khó phân biệt car/truck) để người thứ hai xem lại. Pipeline làm việc tương tự bằng cảnh báo WARN: `BOX_TINY` và `POSSIBLE_*` được dồn vào `05_review_queue.csv` và xếp ưu tiên theo trọng số × conf, thay vì để máy tự sửa. Nhãn import từ YOLO không mang thuộc tính này, nên mọi box đều có `can_review = false`.
