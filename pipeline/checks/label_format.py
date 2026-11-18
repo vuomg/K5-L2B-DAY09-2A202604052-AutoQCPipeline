@@ -23,7 +23,57 @@ Gợi ý
 """
 from ..common import ERROR, WARN, Issue, iou_xywh, parse_yolo_line  # noqa: F401
 
+NAME = "label_format"
+
 
 def run(ds, cfg):
-    # TODO: duyệt từng file nhãn, từng dòng
-    raise NotImplementedError("check label_format chưa làm")
+    c = cfg["label_format"]
+    tol, min_px, max_frac, dup_iou = c["overflow_tol"], c["min_box_px"], c["max_box_frac"], c["dup_box_iou"]
+    n_cls = len(ds.classes)
+    issues = []
+
+    for lab in ds.label_files():
+        stem = lab.stem
+        size = None                     # (W, H) — chỉ mở ảnh khi cần
+        seen = []                       # (số dòng, box) các dòng hợp lệ phía trước, để bắt DUP_BOX
+        for ln_no, text in ds.read_label_lines(stem) or []:
+            def add(sev, code, msg, **extra):
+                issues.append(Issue(NAME, sev, code, stem, msg, ln_no, extra))
+
+            try:
+                cls, x, y, w, h = parse_yolo_line(text)
+            except ValueError as e:
+                add(ERROR, "BAD_FORMAT", f"dòng không đúng định dạng YOLO ({e}): {text.strip()!r}")
+                continue
+            if not 0 <= cls < n_cls:
+                add(ERROR, "BAD_CLASS_ID", f"id lớp {cls} ngoài 0..{n_cls - 1}", class_id=cls)
+                continue
+            if w <= 0 or h <= 0:
+                add(ERROR, "BOX_ZERO", f"box không có diện tích (w={w}, h={h})")
+                continue
+
+            # tràn mép ảnh: lấy mức tràn lớn nhất trong 4 mép
+            overflow = max(0.0, -(x - w / 2), (x + w / 2) - 1, -(y - h / 2), (y + h / 2) - 1)
+            if overflow > tol:
+                add(ERROR, "BOX_OUT_OF_IMAGE", f"box tràn ra ngoài ảnh {overflow:.4f}", overflow=round(overflow, 6))
+
+            box = (x, y, w, h)
+            for prev_no, (pc, pb) in seen:
+                if pc == cls:
+                    iou = iou_xywh(pb, box)
+                    if iou > dup_iou:
+                        add(ERROR, "DUP_BOX", f"trùng box ở dòng {prev_no} (cùng lớp, IoU={iou:.3f})",
+                            iou=round(iou, 4), dup_of=prev_no)
+                        break
+            seen.append((ln_no, (cls, box)))
+
+            if size is None:
+                size = ds.image_size(stem) or False
+            if size:
+                W, H = size
+                short = min(w * W, h * H)
+                if short < min_px:
+                    add(WARN, "BOX_TINY", f"box quá nhỏ: cạnh ngắn {short:.1f}px < {min_px}px", short_px=round(short, 2))
+            if w * h > max_frac:
+                add(WARN, "BOX_HUGE", f"box chiếm {w * h:.0%} ảnh (> {max_frac:.0%})", area_frac=round(w * h, 4))
+    return issues
